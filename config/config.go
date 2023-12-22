@@ -648,7 +648,7 @@ func ParseRawConfig(rawCfg *RawConfig) (*Config, error) {
 	config.DNS = dnsCfg
 
 	err = parseTun(rawCfg.Tun, config.General)
-	if !features.CMFA && err != nil {
+	if !features.Android && err != nil {
 		return nil, err
 	}
 

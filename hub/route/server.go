@@ -2,6 +2,7 @@ package route
 
 import (
 	"bytes"
+	"context"
 	"crypto/subtle"
 	"crypto/tls"
 	"encoding/json"
@@ -35,6 +36,7 @@ var (
 	httpServer *http.Server
 	tlsServer  *http.Server
 	unixServer *http.Server
+	server     *http.Server
 )
 
 type Traffic struct {
@@ -127,6 +129,39 @@ func router(isDebug bool, secret string, dohServer string) *chi.Mux {
 	}
 
 	return r
+}
+
+func ReStartServer(addr string) {
+	if addr == "" {
+		StopServer()
+		return
+	}
+	if server != nil && server.Addr == addr {
+		return
+	}
+	StopServer()
+	server = &http.Server{
+		Addr:    addr,
+		Handler: router(false, "", ""),
+	}
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			log.Errorln("External controller listen error: %s", err)
+		}
+	}()
+
+}
+
+func StopServer() {
+	if server == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Errorln("Shutdown external controller:", err)
+	}
+	server = nil
 }
 
 func start(cfg *Config) {

@@ -100,8 +100,6 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	updateGeneral(cfg.General)
 	updateNTP(cfg.NTP)
 	updateDNS(cfg.DNS, cfg.General.IPv6)
-	updateListeners(cfg.General, cfg.Listeners, force)
-	updateTun(cfg.General) // tun should not care "force"
 	updateIPTables(cfg)
 	updateTunnels(cfg.Tunnels)
 
@@ -113,8 +111,6 @@ func ApplyConfig(cfg *config.Config, force bool) {
 	loadRuleProvider(cfg.RuleProviders)
 	runtime.GC()
 	tunnel.OnRunning()
-	hcCompatibleProvider(cfg.Providers)
-	initExternalUI()
 
 	log.SetLevel(cfg.General.LogLevel)
 }
@@ -287,10 +283,9 @@ func updateRules(rules []C.Rule, subRules map[string][]C.Rule, ruleProviders map
 func loadProvider(pv provider.Provider) {
 	if pv.VehicleType() == provider.Compatible {
 		return
-	} else {
-		log.Infoln("Start initial provider %s", (pv).Name())
 	}
-
+	providerName := (pv).Name()
+	log.Infoln("Start initial provider %s", providerName)
 	if err := pv.Initial(); err != nil {
 		switch pv.Type() {
 		case provider.Proxy:
@@ -303,41 +298,29 @@ func loadProvider(pv provider.Provider) {
 			}
 
 		}
+	} else {
+		if DefaultProviderLoadedHook != nil {
+			DefaultProviderLoadedHook(providerName)
+		}
 	}
 }
 
 func loadRuleProvider(ruleProviders map[string]provider.RuleProvider) {
-	wg := sync.WaitGroup{}
-	ch := make(chan struct{}, concurrentCount)
 	for _, ruleProvider := range ruleProviders {
 		ruleProvider := ruleProvider
-		wg.Add(1)
-		ch <- struct{}{}
 		go func() {
-			defer func() { <-ch; wg.Done() }()
 			loadProvider(ruleProvider)
-
 		}()
 	}
-
-	wg.Wait()
 }
 
 func loadProxyProvider(proxyProviders map[string]provider.ProxyProvider) {
-	// limit concurrent size
-	wg := sync.WaitGroup{}
-	ch := make(chan struct{}, concurrentCount)
 	for _, proxyProvider := range proxyProviders {
 		proxyProvider := proxyProvider
-		wg.Add(1)
-		ch <- struct{}{}
 		go func() {
-			defer func() { <-ch; wg.Done() }()
 			loadProvider(proxyProvider)
 		}()
 	}
-
-	wg.Wait()
 }
 func hcCompatibleProvider(proxyProviders map[string]provider.ProxyProvider) {
 	// limit concurrent size

@@ -43,7 +43,7 @@ func ApplyConfig(cfg *config.Config) {
 }
 
 func applyRoute(cfg *config.Config) {
-	if features.CMFA && strings.HasSuffix(cfg.Controller.ExternalUI, ":0") {
+	if features.Android && strings.HasSuffix(cfg.Controller.ExternalUI, ":0") {
 		// CMFA have set its default override value to end with ":0" for security.
 		// so we direct return at here
 		return
@@ -84,4 +84,9 @@ func Parse(configBytes []byte, options ...Option) error {
 
 	ApplyConfig(cfg)
 	return nil
+}
+
+func UltraApplyConfig(cfg *config.Config) {
+	route.ReStartServer(cfg.Controller.ExternalController)
+	executor.ApplyConfig(cfg, true)
 }
