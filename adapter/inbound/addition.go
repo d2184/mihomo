@@ -63,9 +63,3 @@ func WithInAddr(addr net.Addr) Addition {
 		}
 	}
 }
-
-func WithDSCP(dscp uint8) Addition {
-	return func(metadata *C.Metadata) {
-		metadata.DSCP = dscp
-	}
-}
