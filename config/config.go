@@ -498,12 +498,12 @@ func DefaultRawConfig() *RawConfig {
 			StoreSelected: true,
 		},
 		GeoXUrl: GeoXUrl{
-			Mmdb:    "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb",
-			ASN:     "https://github.com/xishang0128/geoip/releases/download/latest/GeoLite2-ASN.mmdb",
-			GeoIp:   "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.dat",
-			GeoSite: "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat",
+			Mmdb:    "https://github.com/d2184/geoip/raw/release/geoip.metadb",
+			ASN:     "https://github.com/v5tech/geoip/raw/main/GeoLite2-ASN.mmdb",
+			GeoIp:   "https://github.com/d2184/geoip/raw/release/geoip.dat",
+			GeoSite: "https://github.com/d2184/geosite/raw/release/geosite.dat",
 		},
-		ExternalUIURL: "https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip",
+		ExternalUIURL: "https://github.com/d2184/xd/archive/refs/heads/gh-pages.zip",
 	}
 }
 
