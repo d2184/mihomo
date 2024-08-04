@@ -1,0 +1,119 @@
+name: Build
+on:
+  workflow_dispatch:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
+    branches:
+      - Alpha
+
+env: 
+  TZ: Asia/Shanghai
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  Clean_Jobs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Workflow runs delete
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 4
+
+      - name: Delete current release assets
+        uses: 8Mi-Tech/delete-release-assets-action@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: Prerelease-Alpha
+          deleteOnlyFromDrafts: false
+
+  Build:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    needs: [Clean_Jobs]
+    strategy:
+      matrix:
+        jobs:
+          - { goos: linux, goarch: amd64, goamd64: v1, output: amd64-v1 }
+
+          - { goos: linux, goarch: amd64, goamd64: v3, output: amd64-v3}
+
+          - { goos: windows, goarch: amd64, goamd64: v1, output: amd64-v1 }
+
+          - { goos: windows, goarch: amd64, goamd64: v3, output: amd64-v3 }
+
+          - { goos: android, goarch: arm64, ndk: aarch64-linux-android35, output: arm64-v8 }
+
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-download-base-url: 'https://github.com/MetaCubeX/go/releases/download/build'
+        go-version: '1.26'
+
+    - name: Set variables
+      run: |
+        echo "VERSION=alpha-$(git rev-parse --short=7 HEAD~1)" >> $GITHUB_ENV
+
+    - name: Set Time Variable
+      run: |
+        echo "BUILDTIME=$(date)" >> $GITHUB_ENV
+        echo "CGO_ENABLED=0" >> $GITHUB_ENV
+        echo "BUILDTAG=-extldflags --static" >> $GITHUB_ENV
+        echo "GOTOOLCHAIN=local" >> $GITHUB_ENV
+
+    - name: Setup NDK
+      if: ${{ matrix.jobs.goos == 'android' }}
+      uses: nttld/setup-ndk@v1
+      id: setup-ndk
+      with:
+        ndk-version: r29
+
+    - name: Set NDK path
+      if: ${{ matrix.jobs.goos == 'android' }}
+      run: |
+        ls /opt/hostedtoolcache/ndk/r29/x64/toolchains/llvm/prebuilt/linux-x86_64/bin/
+        echo "CC=${{steps.setup-ndk.outputs.ndk-path}}/toolchains/llvm/prebuilt/linux-x86_64/bin/${{matrix.jobs.ndk}}-clang" >> $GITHUB_ENV
+        echo "CGO_ENABLED=1" >> $GITHUB_ENV
+        echo "BUILDTAG=" >> $GITHUB_ENV
+
+    - name: Build core
+      env:
+        GOOS: ${{matrix.jobs.goos}}
+        GOARCH: ${{matrix.jobs.goarch}}
+        GOAMD64: ${{matrix.jobs.goamd64}}
+      run: |
+        go env
+        go build -v -tags "with_gvisor" -trimpath -ldflags "${BUILDTAG} -X 'github.com/metacubex/mihomo/constant.Version=${VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILDTIME}' -w -s -buildid="
+        if [ "${{matrix.jobs.goos}}" = "windows" ]; then
+          mv mihomo.exe mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}.exe
+          zip -r mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.zip mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}.exe
+          rm mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}.exe
+        else
+          mv mihomo mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}
+          gzip -c mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}} > mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}-${VERSION}.gz
+          rm mihomo-${{matrix.jobs.goos}}-${{matrix.jobs.output}}
+        fi
+
+    - name: Publish
+      uses: svenstaro/upload-release-action@master
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        tag: Prerelease-Alpha
+        release_name: Prerelease-Alpha
+        file: mihomo*
+        prerelease: true
+        overwrite: true
+        file_glob: true
+
