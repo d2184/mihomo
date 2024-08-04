@@ -1,0 +1,138 @@
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
+    branches:
+      - Alpha
+
+env:
+  TZ: Asia/Shanghai
+
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  Clean:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete old workflows
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 3
+      
+      - name: Delete current release assets
+        uses: mknejp/delete-release-assets@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: Prerelease-Alpha
+          assets: |
+            *.gz
+            *.zip
+          fail-if-no-assets: false
+          fail-if-no-release: false
+
+  Build:
+    strategy:
+      matrix:
+        include:
+          # windows
+          - name: windows-amd64-v3
+            goos: windows
+            goarch: amd64
+            goamd64: v3
+          # android
+          - name: android-arm64-v8
+            goos: android
+            goarch: arm64
+      fail-fast: false
+    permissions: write-all
+    runs-on: ubuntu-latest
+    needs: [Clean]
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          check-latest: true
+
+      - name: Set variables
+        run: |
+          git reset --soft HEAD~1
+          echo "VERSION=$(git rev-parse HEAD | cut -c 1-7 )" >> $GITHUB_ENV
+          echo "BUILD_VERSION=alpha-$(git rev-parse HEAD | cut -c 1-7 )" >> $GITHUB_ENV
+          echo "BUILD_TIME=$(date)" >> $GITHUB_ENV
+          echo "TAGS=with_gvisor" >> $GITHUB_ENV
+          echo "GOTOOLCHAIN=local" >> $GITHUB_ENV
+          sed -i 's/Mihomo Meta/Mihomo/g' main.go
+        shell: bash
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        if: ${{ contains(matrix.name, 'android') }}
+        id: setup-ndk
+        with:
+          ndk-version: r27c
+          local-cache: false
+          link-to-sdk: false
+
+      - name: Build
+        if: ${{ !contains(matrix.name, 'android') }}
+        run: |
+          mkdir -p bin
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 GOAMD64=v3 go build -v -tags ${TAGS} -trimpath -ldflags "-extldflags --static -X 'github.com/metacubex/mihomo/constant.Version=${BUILD_VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILD_TIME}' -w -s -buildid=" -o bin/mihomo-${{ matrix.name }}-${BUILD_VERSION}.exe
+
+      - name: Build Android
+        if: ${{ contains(matrix.name, 'android') }}
+        run: |
+          mkdir -p bin
+          CC=${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android34-clang
+          CGO_ENABLED=1 CC=${CC} GOOS=android GOARCH=arm64 go build -v -tags ${TAGS} -trimpath -ldflags "-X 'github.com/metacubex/mihomo/constant.Version=${BUILD_VERSION}' -X 'github.com/metacubex/mihomo/constant.BuildTime=${BUILD_TIME}' -w -s -buildid=" -o bin/mihomo-${{ matrix.name }}-${BUILD_VERSION}
+
+      - name: Pack
+        if: ${{ !contains(matrix.name, 'android') }}
+        run: |
+          cd bin && zip -r mihomo-${{ matrix.name }}-${BUILD_VERSION}.zip mihomo* && cd ..
+        shell: bash
+
+      - name: Pack Android
+        if: ${{ contains(matrix.name, 'android') }}
+        run: |
+          cd bin && gzip mihomo-${{ matrix.name }}-${BUILD_VERSION} && cd ..
+        shell: bash
+
+      - name: Public
+        if: ${{ !contains(matrix.name, 'android') }}
+        uses: svenstaro/upload-release-action@master
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: Prerelease-Alpha
+          release_name: Prerelease-Alpha
+          file: "bin/*.zip"
+          prerelease: true
+          overwrite: true
+          file_glob: true
+
+      - name: Public Android
+        if: ${{ contains(matrix.name, 'android') }}
+        uses: svenstaro/upload-release-action@master
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: Prerelease-Alpha
+          release_name: Prerelease-Alpha
+          file: "bin/*.gz"
+          prerelease: true
+          overwrite: true
+          file_glob: true
