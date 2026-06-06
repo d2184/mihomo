@@ -21,6 +21,7 @@ type Fallback struct {
 	testUrl        string
 	selected       string
 	expectedStatus string
+	lastSelected   string
 }
 
 func (f *Fallback) Now() string {
@@ -107,6 +108,10 @@ func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 	for _, proxy := range proxies {
 		if len(f.selected) == 0 {
 			if proxy.AliveForTestUrl(f.testUrl) {
+				if GroupSelectedHook != nil && proxy.Name() != f.lastSelected {
+					go GroupSelectedHook(f.Name(), proxy.Name())
+					f.lastSelected = proxy.Name()
+				}
 				return proxy
 			}
 		} else {
@@ -115,6 +120,7 @@ func (f *Fallback) findAliveProxy(touch bool) C.Proxy {
 					return proxy
 				} else {
 					f.selected = ""
+					f.lastSelected = ""
 				}
 			}
 		}
@@ -137,6 +143,7 @@ func (f *Fallback) Set(name string) error {
 	}
 
 	f.selected = name
+	f.lastSelected = ""
 	if !p.AliveForTestUrl(f.testUrl) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(5000))
 		defer cancel()
@@ -149,6 +156,7 @@ func (f *Fallback) Set(name string) error {
 
 func (f *Fallback) ForceSet(name string) {
 	f.selected = name
+	f.lastSelected = ""
 }
 
 func (f *Fallback) Providers() []P.ProxyProvider {
