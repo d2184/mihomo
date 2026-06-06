@@ -19,6 +19,7 @@ import (
 
 var (
 	SwitchProxiesCallback func(sGroup string, sProxy string)
+	UnfixProxyCallback    func(groupName string)
 )
 
 func proxyRouter() http.Handler {
@@ -152,6 +153,9 @@ func unfixedProxy(w http.ResponseWriter, r *http.Request) {
 	if selectAble, ok := proxy.Adapter().(outboundgroup.SelectAble); ok && proxy.Type() != C.Selector {
 		selectAble.ForceSet("")
 		cachefile.Cache().SetSelected(proxy.Name(), "")
+		if UnfixProxyCallback != nil {
+			go UnfixProxyCallback(proxy.Name())
+		}
 		render.NoContent(w, r)
 		return
 	}
