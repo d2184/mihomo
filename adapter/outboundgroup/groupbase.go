@@ -41,6 +41,9 @@ type GroupBase struct {
 	providerProxies  []C.Proxy
 }
 
+// GroupSelectedHook is called when a group's auto-selected proxy changes.
+var GroupSelectedHook func(groupName string, proxyName string)
+
 type GroupBaseOption struct {
 	Name           string
 	Type           C.AdapterType
