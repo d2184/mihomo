@@ -136,8 +136,15 @@ func (u *URLTest) fast(touch bool) C.Proxy {
 
 		}
 		// tolerance
+		prevName := ""
+		if u.fastNode != nil {
+			prevName = u.fastNode.Name()
+		}
 		if u.fastNode == nil || fastNotExist || !u.fastNode.AliveForTestUrl(u.testUrl) || u.fastNode.LastDelayForTestUrl(u.testUrl) > fast.LastDelayForTestUrl(u.testUrl)+u.tolerance {
 			u.fastNode = fast
+		}
+		if GroupSelectedHook != nil && u.fastNode.Name() != prevName {
+			go GroupSelectedHook(u.Name(), u.fastNode.Name())
 		}
 		return u.fastNode, nil
 	})
